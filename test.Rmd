@@ -1,0 +1,90 @@
+---
+title: "Clustering tests"
+author: "Sebastien Abilla"
+date: "31/05/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+## libraries and data
+```{r libraries and data}
+library(dplyr);library(readr);library(fastcluster)
+library(cluster);library(factoextra);library(magrittr)
+data <- read_csv("Data/Data.csv")
+```
+
+
+## hclust algorithm
+Proposed method, I used <https://www.stat.berkeley.edu/~s133/Cluster2a.html> to understand the basics.
+
+```{r hclust}
+dist <- round(dist(data))
+method = c("complete","single","average","centroid","median","ward","mcquitty")
+hclusttable_groups3 <- tibble(observation = 1:27)
+par(mfrow=c(2,2))
+for (i in 1:7) {
+  cluster <- hclust(dist, method = method[i]) 
+  plot(cluster)
+  groups3 <- cutree(cluster,3) 
+  hclusttable_groups3 <- tibble(hclusttable_groups3, groups3 = groups3)
+  names(hclusttable_groups3)[i+1] <- paste("hc",method[i])
+}
+```
+
+## k-means algorithm
+Maybe the most used method nowadays. "Powerful" computers required. (Powerful... compared to 30 years before)
+
+#### Evaluate the number of clusters
+
+```{r}
+method = c("wss", "silhouette", "gap_stat")
+a <- fviz_nbclust(data, kmeans, method = method[1],k.max = 20)+
+  labs(subtitle = method[1])
+b <- fviz_nbclust(data, kmeans, method = method[2],k.max = 20)+
+  labs(subtitle = method[2])
+c <- fviz_nbclust(data, kmeans, method = method[3],k.max = 20)+
+  labs(subtitle = method[3])
+gridExtra::grid.arrange(a,b,c, ncol=2)
+```
+
+1 or 2 clusters are recommanded, but lets do 3. :) 
+
+#### Examples
+
+k-means use randomness so it didn't always give the same answer.
+
+```{r}
+a <- fviz_cluster(kmeans(data, 3), data = data, frame.type = "convex")
+b <- fviz_cluster(kmeans(data, 3), data = data, frame.type = "convex")
+c <- fviz_cluster(kmeans(data, 3), data = data, frame.type = "convex")
+d <- fviz_cluster(kmeans(data, 3), data = data, frame.type = "convex")
+gridExtra::grid.arrange(a,b,c,d)
+```
+
+So, let's do it several times.
+
+#### re-run the function
+
+```{r}
+kmeans3 <- replicate(20, {
+km <- kmeans(data, 3)
+tibble(clu = km$cluster) %>% 
+  group_by(clu) %>% mutate(n = n()) %>% ungroup() %>%
+  mutate(new_group = ifelse(n == max(n), 1, ifelse(n == min(n), 3, 2))) %>%
+  pull(new_group) %>% unlist
+})
+meankmeans <- round(rowMeans(kmeans3))
+```
+
+I select the cluster based on mean. A selection based on max frequency may be better, but it's not obvious for me how to code it. I will have to think/search how to do it.
+
+## Conclusion : All methods compared
+
+```{r}
+clusters <- tibble(hclusttable_groups3, kmeans = meankmeans)
+knitr::kable(clusters)
+```
+
+As suggested by the k-means evaluation, there is probably not enough data yet to really make 3 clusters. There are 2 groups and one "strange" number 5.
